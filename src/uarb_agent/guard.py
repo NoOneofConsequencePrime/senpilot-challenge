@@ -7,7 +7,9 @@ from enum import Enum
 
 from .state import State
 
-AUTOMATED_SENDERS = re.compile(r"^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounce[s]?)([+@]|$)", re.I)
+AUTOMATED_SENDERS = re.compile(
+    r"^(mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounce[s]?)([+@]|$)", re.IGNORECASE
+)
 
 
 class Verdict(str, Enum):

@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = ["pytest==9.2.0", "ruff==0.17.3"]
 
 [project.scripts]
 uarb-agent = "uarb_agent.main:main"
@@ -28,6 +28,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src", "tests"]
 markers = ["live: hits the real UARB site (excluded from CI)"]
 addopts = "-m 'not live'"
 
