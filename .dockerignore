@@ -1,0 +1,10 @@
+.env
+.env.*
+.git
+.claude
+.venv
+data
+spikes
+tests
+evals
+**/__pycache__

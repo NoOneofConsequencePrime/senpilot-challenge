@@ -1,0 +1,17 @@
+services:
+  agent:
+    build: .
+    image: uarb-agent
+    restart: unless-stopped  # comes back after crashes and VM reboots
+    init: true  # reaps Chromium's child processes
+    env_file: .env
+    volumes:
+      - agent-data:/data  # SQLite state survives rebuilds
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  agent-data:
