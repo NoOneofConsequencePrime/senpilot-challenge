@@ -24,7 +24,7 @@ from .intent import IntentError, IntentParser
 from .mailbox import Mailbox, body_text
 from .models import DocType, FetchResult
 from .packager import Delivery, build_zip, choose_delivery, zip_name
-from .scraper import MatterNotFound, ScrapeError, UarbScraper
+from .scraper import MatterNotFound, RowOutOfReach, ScrapeError, UarbScraper
 from .state import State
 from .storage import Storage
 
@@ -101,6 +101,11 @@ class Pipeline:
                 results.append(self.scraper.fetch(req, work / f"req{i}"))
             except MatterNotFound:
                 errors.append(f"I couldn't find matter {req.matter} on the UARB site. Please check the number.")
+            except RowOutOfReach as exc:
+                errors.append(
+                    f"I can only reach the first {exc.args[0]} {req.doc_type.value} for {req.matter} as the site "
+                    f"lists them, so I couldn't start from number {req.start}."
+                )
             except (ScrapeError, PlaywrightError) as exc:
                 log.error("scrape failed", extra={"matter": req.matter, "type": req.doc_type.value, "error": str(exc)})
                 errors.append(

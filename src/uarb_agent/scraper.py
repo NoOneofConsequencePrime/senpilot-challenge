@@ -64,6 +64,10 @@ class ScrapeError(Exception):
     pass
 
 
+class RowOutOfReach(Exception):
+    """The requested start position is past the rows the site renders without scrolling (args[0] = row count)."""
+
+
 class OverBudget(Exception):
     """The next recording would exceed the per-request size budget."""
 
@@ -137,9 +141,7 @@ class UarbScraper:
                     self._open_tab(page, req.doc_type)
                     rendered = [parse_row(r) for r in page.evaluate(ROWS_JS)]
                     if req.start > len(rendered):
-                        raise ScrapeError(
-                            f"position {req.start} is beyond the {len(rendered)} rows the site shows without scrolling"
-                        )
+                        raise RowOutOfReach(len(rendered))
                     rows = rendered[req.start - 1 : req.start - 1 + req.limit]
                     log.info("rows", extra={"matter": req.matter, "type": req.doc_type.value, "rows": len(rows)})
                     self._download_all(page, rows, req.doc_type, dest, result)
