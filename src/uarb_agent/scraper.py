@@ -230,7 +230,8 @@ class UarbScraper:
                     log.warning("download attempt failed", extra={"doc": label, "attempt": attempt, "error": str(exc)})
                     self._dismiss_dialogs(page)
             else:
-                result.failures.append(f"{label}: could not download ({type(error).__name__})")
+                log.error("download failed", extra={"doc": label, "error": repr(error)})
+                result.failures.append(f"{label} (download failed after {ATTEMPTS} tries)")
                 continue
             used += downloaded.size
             result.files.append(downloaded)

@@ -4,13 +4,14 @@ import logging
 import shutil
 import uuid
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from playwright.sync_api import Error as PlaywrightError
 
 from . import guard
 from .composer import (
+    Notice,
     ReplyParts,
     compose_ack,
     compose_clarification,
@@ -18,6 +19,7 @@ from .composer import (
     compose_not_allowed,
     compose_rate_limited,
     compose_result,
+    first_name,
 )
 from .config import Settings
 from .intent import IntentError, IntentParser
@@ -67,6 +69,7 @@ class Pipeline:
         if "received" not in (msg.labels or []):
             return "ignored", "not an inbound message"
         sender = guard.sender_address(msg.from_)
+        name = first_name(msg.from_)
         verdict, why = guard.check(
             sender, self.s.agentmail_inbox, self.mailbox.raw_headers(message_id), self.state,
             self.s.allowed, self.s.per_sender_per_hour, self.s.global_per_day,
@@ -75,10 +78,10 @@ class Pipeline:
         if verdict is guard.Verdict.IGNORE:
             return "ignored", why
         if verdict is guard.Verdict.NOT_ALLOWED:
-            self.mailbox.reply(message_id, compose_not_allowed(job_id))
+            self.mailbox.reply(message_id, compose_not_allowed(job_id, name))
             return "done", "sender not allowed"
         if verdict is guard.Verdict.RATE_LIMITED:
-            self.mailbox.reply(message_id, compose_rate_limited(job_id))
+            self.mailbox.reply(message_id, compose_rate_limited(job_id, name))
             return "done", "rate limited"
         self.state.record_served(sender)
 
@@ -86,34 +89,37 @@ class Pipeline:
             parsed = self.intent.parse(body_text(msg), self.mailbox.history(msg))
         except IntentError as exc:
             log.error("intent failed", extra={"error": str(exc)})
-            self.mailbox.reply(message_id, compose_failure(job_id))
+            self.mailbox.reply(message_id, compose_failure(job_id, name))
             return "done", "intent failed"
         log.info("intent", extra={"parsed": parsed.model_dump(mode="json")})
         if not parsed.requests:
-            self.mailbox.reply(message_id, compose_clarification(parsed.clarification_needed, job_id))
+            self.mailbox.reply(message_id, compose_clarification(parsed.clarification_needed, job_id, name))
             return "done", "asked for clarification"
 
-        self.mailbox.reply(message_id, compose_ack(parsed.requests, job_id))
+        self.mailbox.reply(message_id, compose_ack(parsed.requests, job_id, name))
         results: list[FetchResult] = []
-        errors: list[str] = []
+        errors: list[Notice] = []
         for i, req in enumerate(parsed.requests):
             try:
                 results.append(self.scraper.fetch(req, work / f"req{i}"))
             except MatterNotFound:
-                errors.append(f"I couldn't find matter {req.matter} on the UARB site. Please check the number.")
+                errors.append(Notice(
+                    f"I couldn't find matter {req.matter}",
+                    "Matter numbers look like M12205 (the letter M and 5 digits). Check the number and reply with it here.",
+                ))
             except RowOutOfReach as exc:
-                errors.append(
-                    f"I can only reach the first {exc.args[0]} {req.doc_type.value} for {req.matter} as the site "
-                    f"lists them, so I couldn't start from number {req.start}."
-                )
+                errors.append(Notice(
+                    f"Can't start at number {req.start} for {req.matter} {req.doc_type.value}",
+                    f"I can only reach the first {exc.args[0]} as the site lists them. Ask for a lower range.",
+                ))
             except (ScrapeError, PlaywrightError) as exc:
                 log.error("scrape failed", extra={"matter": req.matter, "type": req.doc_type.value, "error": str(exc)})
-                errors.append(
-                    f"I couldn't fetch {req.doc_type.value} for {req.matter} because the UARB site didn't respond "
-                    "as expected. Please try again in a few minutes."
-                )
+                errors.append(Notice(
+                    f"I couldn't fetch {req.doc_type.value} for {req.matter}",
+                    "The UARB site didn't respond as expected. Please try again in a few minutes.",
+                ))
 
-        parts = ReplyParts(results=results, errors=errors, notes=parsed.notes, job_id=job_id)
+        parts = ReplyParts(results=results, errors=errors, notes=parsed.notes, job_id=job_id, name=name)
         zip_path = None
         if any(r.files for r in results):
             zip_path = work / zip_name(results, datetime.now())
@@ -121,6 +127,7 @@ class Pipeline:
             has_recordings = any(r.request.doc_type is DocType.RECORDINGS and r.files for r in results)
             parts.link_days = self.s.recordings_link_days if has_recordings else self.s.link_days
             prefix = "recordings" if has_recordings else "zips"
+            parts.link_expires = (datetime.now() + timedelta(days=parts.link_days)).date()
             parts.link = self.storage.upload(zip_path, f"{prefix}/{job_id}/{zip_path.name}", parts.link_days)
             parts.delivery = choose_delivery(parts.zip_size, self.s.inline_max_bytes, self.s.attach_max_bytes)
             log.info("zip ready", extra={"bytes": parts.zip_size, "delivery": parts.delivery.value})

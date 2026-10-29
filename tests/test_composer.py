@@ -1,11 +1,16 @@
+from datetime import date
+
+import pytest
 from conftest import make_files, make_result
 
 from uarb_agent.composer import (
+    Notice,
     ReplyParts,
     compose_ack,
     compose_result,
     counts_sentence,
     download_sentence,
+    first_name,
     fmt_size,
 )
 from uarb_agent.models import DocRequest, DocType
@@ -84,7 +89,8 @@ def test_link_only_for_large_zips(tmp_path, metadata, counts):
                                       link="https://x/y.zip", job_id="j"))
     assert "and am attaching" not in reply.text
     assert "The ZIP is 124.0 MB, which is too large to attach" in reply.text
-    assert '<a href="https://x/y.zip">download link</a>' in reply.html
+    assert '<a href="https://x/y.zip"' in reply.html
+    assert "Too large to attach to an email" in reply.html
 
 
 def test_html_escapes_document_titles(tmp_path, metadata, counts):
@@ -111,3 +117,49 @@ def test_ack_warns_that_recordings_are_slow():
 def test_fmt_size():
     assert fmt_size(450_576) == "0.5 MB"
     assert fmt_size(37_977) == "37 KB"
+
+
+def test_status_badge(tmp_path, metadata, counts):
+    ok = make_result(metadata, counts, make_files(tmp_path, 2))
+    assert "Ready" in compose_result(ReplyParts(results=[ok], job_id="j")).html
+    ok.failures.append("1: could not download (ScrapeError)")
+    assert "Partially ready" in compose_result(ReplyParts(results=[ok], job_id="j")).html
+    empty = make_result(metadata, counts, [], doc_type=DocType.TRANSCRIPTS)
+    assert "No files" in compose_result(ReplyParts(results=[empty], job_id="j")).html
+
+
+def test_errors_only_reply(tmp_path):
+    reply = compose_result(ReplyParts(results=[], errors=[Notice("I couldn't find matter M99999", "Check it.")],
+                                      job_id="j"))
+    assert reply.text.startswith("Hi there,\n\nI couldn't find matter M99999")
+    assert "find matter M99999" in reply.html
+
+
+def test_link_expiry_is_shown(tmp_path, metadata, counts):
+    result = make_result(metadata, counts, make_files(tmp_path, 1))
+    reply = compose_result(ReplyParts(results=[result], delivery=Delivery.INLINE, zip_size=1000,
+                                      link="https://x/y.zip", link_expires=date(2026, 11, 4), job_id="j"))
+    assert "link expires Nov 4, 2026" in reply.html
+    assert "until November 4, 2026" in reply.text
+
+
+@pytest.mark.parametrize("header,expected", [
+    ("Nona Yorbiznes <x@protonmail.com>", "Nona"),
+    ('"jane doe" <jane@example.com>', "Jane"),
+    ("Mary-Kate O'Neil <m@example.com>", "Mary-Kate"),
+    ("jane@example.com", "there"),
+    ("<jane@example.com>", "there"),
+    ("Team 42 <t@example.com>", "Team"),
+    ("1234 <t@example.com>", "there"),
+    ("", "there"),
+])
+def test_first_name(header, expected):
+    assert first_name(header) == expected
+
+
+def test_greeting_in_every_email(tmp_path, metadata, counts):
+    result = compose_result(ReplyParts(results=[make_result(metadata, counts, [])], job_id="j", name="Nona"))
+    ack = compose_ack([DocRequest(matter="M12205", doc_type=DocType.EXHIBITS)], "j", "Nona")
+    for reply in (result, ack):
+        assert reply.text.startswith("Hi Nona,")
+        assert "Hi Nona," in reply.html
