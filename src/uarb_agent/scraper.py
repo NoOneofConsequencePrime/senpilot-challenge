@@ -135,7 +135,12 @@ class UarbScraper:
                 result = FetchResult(request=req, metadata=metadata, counts=counts)
                 if counts[req.doc_type]:
                     self._open_tab(page, req.doc_type)
-                    rows = [parse_row(r) for r in page.evaluate(ROWS_JS)][: req.limit]
+                    rendered = [parse_row(r) for r in page.evaluate(ROWS_JS)]
+                    if req.start > len(rendered):
+                        raise ScrapeError(
+                            f"position {req.start} is beyond the {len(rendered)} rows the site shows without scrolling"
+                        )
+                    rows = rendered[req.start - 1 : req.start - 1 + req.limit]
                     log.info("rows", extra={"matter": req.matter, "type": req.doc_type.value, "rows": len(rows)})
                     self._download_all(page, rows, req.doc_type, dest, result)
                 return result

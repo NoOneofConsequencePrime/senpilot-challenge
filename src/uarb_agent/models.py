@@ -32,8 +32,9 @@ def normalize_matter(raw: str) -> str:
 class DocRequest(BaseModel):
     matter: str
     doc_type: DocType
-    # The site lists newest first; we take the first `limit` rows.
+    # Rows are taken in the site's own order (which varies by tab), starting at 1-based position `start`.
     limit: int = Field(default=MAX_FILES, ge=1, le=MAX_FILES)
+    start: int = Field(default=1, ge=1)
 
     @field_validator("matter")
     @classmethod
