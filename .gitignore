@@ -15,5 +15,6 @@ __pycache__/
 data/
 spikes/out/
 
-# Local Claude Code scratch
-.claude/scratch/
+# Local Claude Code files (settings, scratch, project instructions)
+.claude/
+CLAUDE.md
