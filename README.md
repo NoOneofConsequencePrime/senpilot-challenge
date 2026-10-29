@@ -8,7 +8,11 @@ replies in the same thread with the files, the matter's metadata, and a count of
 
 > Hi Agent, Can you give me Other Documents files from M12205? Thanks!
 
-Within seconds you get an acknowledgement, then (about a minute later) a reply like this:
+Within seconds you get an acknowledgement, then (about a minute later) the reply, with the ZIP attached:
+
+<img src="docs/reply.png" alt="The agent's reply: matter title, status, download button, matter facts, filing timeline, file counts and the list of attached files" width="480">
+
+The email's plain-text part carries the same facts in the assignment's example wording:
 
 > M12205 is about the Halifax Regional Water Commission - Windsor Street Exchange Redevelopment Project -
 > $69,275,000. It relates to Capital Expenditure Approvals within the Water category. The matter had an initial
@@ -16,14 +20,6 @@ Within seconds you get an acknowledgement, then (about a minute later) a reply l
 > given). I found 13 Exhibits, 6 Key Documents, 44 Other Documents, and no Transcripts or Recordings (63 files in
 > total). I downloaded 10 out of the 44 Other Documents (the first 10 as listed on the UARB site) and am
 > attaching them as a ZIP here.
->
-> You can also download the ZIP here (link valid for 7 days): download link
->
-> | Doc # | Title | Date | Size |
-> |---|---|---|---|
-> | 104160 | Utility (Board) - Update | October 28, 2026 | 0.5 MB |
-> | 102674 | Board Order | July 8, 2026 | 0.2 MB |
-> | … | | | |
 
 The live numbers differ slightly from the assignment's example because the matter has had new filings since.
 
@@ -69,7 +65,7 @@ flowchart LR
 | [`scraper.py`](src/uarb_agent/scraper.py) | Drives the FileMaker WebDirect site through the same clicks a person would make |
 | [`packager.py`](src/uarb_agent/packager.py) | ZIP with `<matter>/<type>/` folders and `manifest.csv`; picks how the ZIP travels |
 | [`storage.py`](src/uarb_agent/storage.py) | Uploads ZIPs to OCI Object Storage (S3 API) and presigns download links |
-| [`composer.py`](src/uarb_agent/composer.py) | All reply wording: plain text + HTML table |
+| [`composer.py`](src/uarb_agent/composer.py) | All reply wording and layout: email-safe HTML (inline styles, table layout) plus a plain-text part in the brief's wording |
 | [`pipeline.py`](src/uarb_agent/pipeline.py) | One email end to end, with an explicit reply for every failure mode |
 | [`state.py`](src/uarb_agent/state.py) | SQLite: exactly-once handling across restarts, rate-limit counters |
 
@@ -186,7 +182,7 @@ Update with `git pull && docker compose up -d --build`. State lives in the `agen
 ### Tests
 
 ```bash
-pytest              # 59 unit tests, offline (also run by CI)
+pytest              # 71 unit tests, offline (also run by CI)
 pytest -m live      # against the real UARB site
 ruff check src tests evals
 ```
@@ -200,5 +196,6 @@ ruff check src tests evals
   early.
 - **One job at a time** on a 1/8-CPU VM: a burst of requests queues up. A bigger VM could run several browsers.
 - **Free-tier footprint:** AgentMail appends "Sent via AgentMail"; the Oracle VM may be reclaimed if idle for a week.
-- **Next:** index every fetched filing (metadata + PDF text) into SQLite FTS5 so users can ask research questions
-  ("which HRWC filings mention construction costs?") and get cited answers.
+- **Next: the searchable database.** This agent is the ingestion step; the natural follow-up is to index every
+  fetched filing (metadata + PDF text) into SQLite FTS5 so users can ask research questions ("which HRWC filings
+  mention construction costs?") and get cited answers, the kind of precedent research the Regulatory Agent does.
