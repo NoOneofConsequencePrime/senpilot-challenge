@@ -1,0 +1,36 @@
+[project]
+name = "uarb-agent"
+version = "0.1.0"
+description = "Email agent that fetches documents from the Nova Scotia UARB public documents database"
+requires-python = ">=3.12"
+dependencies = [
+    "agentmail==2.0.20",
+    "boto3==1.43.120",
+    "httpx==0.28.1",
+    "openai==3.40.0",
+    "playwright==1.64.1",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+uarb-agent = "uarb_agent.main:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: hits the real UARB site (excluded from CI)"]
+addopts = "-m 'not live'"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
